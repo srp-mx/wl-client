@@ -16,6 +16,8 @@ struct wl_buffer* bfr;
 struct wl_shm* shm;
 struct xdg_wm_base* sh; // xdg shell
 struct xdg_toplevel* top; // main window
+struct wl_seat* seat;
+struct wl_keyboard* kb;
 uint8_t* pixl;
 uint16_t w = 200;
 uint16_t h = 100;
@@ -141,6 +143,79 @@ struct xdg_wm_base_listener sh_list =
     .ping = sh_ping
 };
 
+void
+kb_map(void* data, struct wl_keyboard* kb, uint32_t frmt, int32_t fd, uint32_t sz)
+{
+
+}
+
+void
+kb_enter(void* data, struct wl_keyboard* kb, uint32_t ser, struct wl_surface* srfc, struct wl_array* keys)
+{
+
+}
+
+void
+kb_leave(void* data, struct wl_keyboard* kb, uint32_t ser, struct wl_surface* srfc)
+{
+
+}
+
+void
+kb_key(void* data, struct wl_keyboard* kb, uint32_t ser, uint32_t t, uint32_t key, uint32_t state)
+{
+    printf("%u\n", key);
+    if (key == 30) {
+        printf("We pressed/unpressed the a key!\n");
+    } else if (key == 1) {
+        cls = 1; // close with esc key
+    }
+}
+
+void
+kb_mod(void* data, struct wl_keyboard* kb, uint32_t ser, uint32_t dep, uint32_t lat, uint32_t lock, uint32_t group)
+{
+
+}
+
+void
+kb_rep(void* data, struct wl_keyboard* kb, int32_t rate, int32_t del)
+{
+
+}
+
+struct wl_keyboard_listener kb_list =
+{
+    .keymap = kb_map,
+    .enter = kb_enter,
+    .leave = kb_leave,
+    .key = kb_key,
+    .modifiers = kb_mod,
+    .repeat_info = kb_rep
+};
+
+void
+seat_cap(void* data, struct wl_seat* seat, uint32_t cap)
+{
+    if (cap & WL_SEAT_CAPABILITY_KEYBOARD && !kb)
+    {
+        kb = wl_seat_get_keyboard(seat);
+        wl_keyboard_add_listener(kb, &kb_list, 0);
+    }
+}
+
+void
+seat_name(void* data, struct wl_seat* seat, int8_t* name)
+{
+
+}
+
+struct wl_seat_listener seat_list =
+{
+    .capabilities = seat_cap,
+    .name = seat_name
+};
+
 // Tells us what globals we'll need. Server-client consistent.
 void
 reg_glob(void* data, struct wl_registry* reg, uint32_t name, int8_t* intf,
@@ -158,6 +233,11 @@ reg_glob(void* data, struct wl_registry* reg, uint32_t name, int8_t* intf,
     {
         sh = wl_registry_bind(reg, name, &xdg_wm_base_interface, 1);
         xdg_wm_base_add_listener(sh, &sh_list, 0);
+    }
+    else if (!strcmp(intf, wl_seat_interface.name))
+    {
+        seat = wl_registry_bind(reg, name, &wl_seat_interface, 1);
+        wl_seat_add_listener(seat, &seat_list, 0);
     }
 }
 
@@ -208,6 +288,13 @@ main()
         }
     }
 
+    if (kb)
+    {
+        // Cleanup the keyboard.
+        wl_keyboard_destroy(kb);
+    }
+    // Release the seat.
+    wl_seat_release(seat);
     if (bfr)
     {
         // Remember to destroy your buffer after you're done with it.
