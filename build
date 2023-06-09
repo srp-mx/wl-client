@@ -1,2 +1,2 @@
 #!/bin/bash
-gcc wl-client.c -o w -lwayland-client
+gcc wl-client.c xdg-shell-protocol.c -o w -lwayland-client
