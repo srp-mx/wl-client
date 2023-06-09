@@ -1,0 +1,2 @@
+#!/bin/bash
+gcc wl-client.c -o w -lwayland-client
