@@ -19,6 +19,8 @@ struct xdg_toplevel* top; // main window
 uint8_t* pixl;
 uint16_t w = 200;
 uint16_t h = 100;
+uint8_t c;
+uint8_t cls;
 
 // Allocates shared memory.
 int32_t
@@ -58,8 +60,29 @@ resz()
 void
 draw()
 {
+    memset(pixl, c, w * h * 4);
 
+    wl_surface_attach(srfc, bfr, 0, 0);
+    wl_surface_damage_buffer(srfc, 0, 0, w, h); // Please update this
+    wl_surface_commit(srfc); // The surface is good to go :D
 }
+
+struct wl_callback_listener cb_list;
+
+void
+frame_new(void* data, struct wl_callback* cb, uint32_t a)
+{
+    wl_callback_destroy(cb);
+    cb = wl_surface_frame(srfc);
+    wl_callback_add_listener(cb, &cb_list, 0);
+    c++;
+    draw();
+}
+
+struct wl_callback_listener cb_list =
+{
+    .done = frame_new
+};
 
 void
 xrfc_conf(void* data, struct xdg_surface* xrfc, uint32_t ser)
@@ -69,9 +92,6 @@ xrfc_conf(void* data, struct xdg_surface* xrfc, uint32_t ser)
         resz();
     }
     draw();
-    wl_surface_attach(srfc, bfr, 0, 0);
-    wl_surface_damage_buffer(srfc, 0, 0, w, h); // Please update this
-    wl_surface_commit(srfc); // The surface is good to go :D
 }
 
 struct xdg_surface_listener xrfc_list =
@@ -80,17 +100,28 @@ struct xdg_surface_listener xrfc_list =
 };
 
 void
-top_conf(void* data, struct xdg_toplevel* top, int32_t w, int32_t h,
+top_conf(void* data, struct xdg_toplevel* top, int32_t nw, int32_t nh,
         struct wl_array* stat)
 {
+    if (!nw || !nh)
+    {
+        return;
+    }
 
+    if (w != nw || h != nh)
+    {
+        munmap(pixl, w * h * 4);
+        w = nw;
+        h = nh;
+        resz();
+    }
 }
 
 // To close the window
 void
 top_cls(void* data, struct xdg_toplevel* top)
 {
-    
+    cls = 1;
 }
 
 struct xdg_toplevel_listener top_list =
@@ -159,6 +190,8 @@ main()
     wl_display_roundtrip(disp); // Tells the server we're looking for data.
 
     srfc = wl_compositor_create_surface(comp);
+    struct wl_callback* cb = wl_surface_frame(srfc);
+    wl_callback_add_listener(cb, &cb_list, 0);
 
     struct xdg_surface* xrfc = xdg_wm_base_get_xdg_surface(sh, srfc);
     xdg_surface_add_listener(xrfc, &xrfc_list, 0);
@@ -167,13 +200,23 @@ main()
     xdg_toplevel_set_title(top, "wayland client");
     wl_surface_commit(srfc);
 
-    while (wl_display_dispatch(disp));
+    while (wl_display_dispatch(disp))
+    {
+        if (cls)
+        {
+            break;
+        }
+    }
 
     if (bfr)
     {
         // Remember to destroy your buffer after you're done with it.
         wl_buffer_destroy(bfr);
     }
+    // Destroy the top level window.
+    xdg_toplevel_destroy(top);
+    // Destroy the xdg surface.
+    xdg_surface_destroy(xrfc);
     // Remember to destroy your surface after you're done with it.
     wl_surface_destroy(srfc);
     // It's good practice to disconnect your display when you're done with it.
